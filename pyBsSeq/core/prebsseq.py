@@ -2,85 +2,75 @@
   pybsseq
 """
 import numpy as np
-import numpy.ma
-import pandas as pd
 import argparse
 import logging
 import sys
-import os.path
+import os
 import scipy.stats as st
-import tabix
-import h5py
+import vcfnp
+import subprocess
 
-logging.basicConfig(format='%(levelname)s:%(asctime)s:  %(message)s', level=logging.DEBUG)
+def setLog(args):
+  if args['logDebug']:
+    numeric_level = getattr(logging, "DEBUG", None)
+  else:
+    numeric_level = getattr(logging, "CRITICAL", None)
+  logging.basicConfig(format='%(levelname)s:%(asctime)s:  %(message)s', level=numeric_level)
 
-def read_bsdata(inFile):
-  BSData = pd.read_table(inFile, header=None, compression = "gzip")
-  BSData = BSData.as_matrix(columns=BSData.columns[0:])
-#  BS_chrom = np.array(BSData[0], dtype="string")
-#  BS_pos = np.array(BSData[1], dtype="int")
-#  BS_strand = np.array(BSData[5], dtype="string")
-#  BS_depcon =  pd.DataFrame(list(BSData[3].str.split(":")))
-
-  np.core.defchararray.rsplit
-
-
-
-  BS_depth = np.array(BS_depcon[1], dtype=int)
-  BS_context = np.array(BS_depcon[0], dtype="string")
-  BS_perMeth = np.array(BSData[4], dtype="float")
-  del BSData
-  return (BS_chrom, BS_pos, BS_strand, BS_context, BS_depth, BS_perMeth)
-
-def getErrorMeth(BS_chrom, BS_pos, BS_depth, BS_perMeth, chrName):
-  chrInd = np.where(BS_chrom == chrName)[0]
-  methPer = np.sum(np.multiply(BS_perMeth[chrInd], BS_depth[chrInd]))/np.sum(BS_depth[chrInd])
-  return (methPer, np.mean(BS_depth[chrInd]))
+def readVcf(inFile):
+  bvcf = vcfnp.variants(inFile, cache=True).view(np.recarray)
+  bvcfD = vcfnp.calldata_2d(inFile, cache=True).view(np.recarray)
+  return(bvcf, bvcfD)
 
 def BinomTest(per_n, n, p, alternative="greater"):
   tpVal = st.binom_test(per_n * n, n, p, alternative = alternative)
   return tpVal
+ 
+ def getErrorRate(bsCHROM, bsCONTEXT, bsMethPer, bstC, chrs = "ChrC"):
+  chrInd = np.where(bsCHROM == chrs)[0]
+  contInd = chrInd[np.where((bsCONTEXT[chrInd] == 'CG') | (bsCONTEXT[chrInd] == 'CHG') | (bsCONTEXT[chrInd] == 'CHH'))[0]]
+  chrMethPer = bsMethPer[contInd]
+  chrDepth = bstC[contInd]
+  conv_rate = np.nansum(np.multiply(chrMethPer, chrDepth))/np.nansum(chrDepth)
+  return conv_rate
 
-def getMPs_readData(args):
-  logging.info("Reading the input file")
-  (BS_chrom, BS_pos, BS_strand, BS_context, BS_depth, BS_perMeth) = read_bsdata(args['inFile'])
-  logging.info("Calculating the conversion rate")
-  ConversionRate = getErrorMeth(BS_chrom, BS_pos, BS_depth, BS_perMeth, "chrC")
+def callMPs(bsMethPer, bstC, error_rate, window=300000):
+  bsPval = np.zeros(0,dtype=float)
   npBinomTest = np.vectorize(BinomTest)
-  window = 300000
-  BS_pVal = np.zeros(0, dtype=float)
-  for i in range(0, len(BS_chrom), window):
-    pVal = npBinomTest(BS_perMeth[i:i+window], BS_depth[i:i+window], ConversionRate[0])
-    BS_pVal = np.append(BS_pVal, pVal)
-    logging.info("Done analyzing %s number of positions", i)
- np.savetxt(args['outFile'], numpy.column_stack((, TotNonMatPos)))
+  for i in range(0, len(bsMethPer), window):
+    pVal = npBinomTest(bsMethPer[i:i+window], bstC[i:i+window], error_rate)
+    bsPval = np.append(bsPval, pVal)
+  return bsPval
+
+def writeBED(bsCHROM, bsPOS, bsCONTEXT, bstC, bsMethPer, bsPval, bsSTRAND, outBED):
+  out = open(outBED, 'w')
+  for i in len(bsPOS):
+    out.write("%s\t%s\t%s\t%s:%s:%s\t%s\t%s\n" % (bsCHROM[i], bsPOS[i], bsPOS[i]+1, bsCONTEXT[i], bstC[i], bsMethPer[i], bsPval[i], bsSTRAND[i]))
+  out.close()
+
+def getMPsfromVCF(args):
+  (bVCF, bvcfD) = readVCF(args['inVCF'])
+  error_rate = getErrorRate(bvcf.CHROM, bvcf.CX, bvcfD.BT[:,0], bvcfD.CV[:,0], chrs = "ChrC")
+  logging.info("Conversion rate: %s", 100 - error_rate * 100)
+  ChrsNums = np.array(("Chr1","Chr2","Chr3","Chr4","Chr5"))
+  MethInd = np.where((np.in1d(bvcf.CHROM, ChrsNums)) & (np.in1d(bvcf.CX, MethContext)))[0]
+  logging.info("Number of positions: %s", len(MethInd))
+  bsPval = callMPs(bvcfD.BT[MethInd,0], bvcfD.CV[MethInd,0], error_rate, window=args['window'])
+  bsSTRAND = np.core.defchararray.replace(np.core.defchararray.replace(bvcf.REF[MethInd], "C", "+"), "G", "-")
+  logging.info("writing MPs info in out bed file")
+  writeBED(bvcf.CHROM[MethInd], bvcf.POS[MethInd], bvcf.CX[MethInd], bvcfD.CV[MethInd,0], bvcfD.BT[MethInd,0], bsPval, bsSTRAND, outBED)
+  logging.info("finished!")
+
+def getMPsBED(args):
+  ## input the split bed file
+  
 
 
-def getMPs(args):
-  logging.info("Reading the input file")
-  (BS_chrom, BS_pos, BS_strand, BS_context, BS_depth, BS_perMeth) = read_bsdata(args['inFile'])
-  BS_no = len(BS_chrom)
-  logging.info("Calculating the conversion rate")
-  ConversionRate = getErrorMeth(BS_chrom, BS_pos, BS_depth, BS_perMeth, "chrC")
-  logging.info("Conversion rate: %s with a average depth in chloroplast at %s", ConversionRate[0], ConversionRate[1])
-  h5file = h5py.File(args['outFile'], 'w')
-  h5file.create_dataset('chromosome', data=BS_chrom, shape=(BS_no,))
-  del BS_chrom
-  h5file.create_dataset('position', data=BS_pos, shape=(BS_no,))
-  del BS_pos
-  h5file.create_dataset('strand', data=BS_strand, shape=(BS_no,))
-  del BS_strand
-  h5file.create_dataset('context', data=BS_context, shape=(BS_no,))
-  del BS_context
-  h5file.create_dataset('depth', data=BS_depth, shape=(BS_no,), dtype="int8")
-  h5file.create_dataset('perMeth', data=BS_perMeth, shape=(BS_no,))
-  logging.info("Reading the file for Methylated Positions")
-  h5file.create_dataset('pVal', shape=(BS_no,), dtype='float')
-  npBinomTest = np.vectorize(BinomTest)
-  window = 300000
-  for i in range(0, BS_no, window):
-    pVal = npBinomTest(BS_perMeth[i:i+window], BS_depth[i:i+window], ConversionRate[0])
-    h5file['pVal'][i:i+window] = np.array(pVal, dtype=float)
-    logging.info("Done analyzing %s number of positions", i+window)
-  h5file.close()
+
+
+
+
+
+
+
 

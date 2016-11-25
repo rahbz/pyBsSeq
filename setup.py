@@ -11,7 +11,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 setup(
     name='pyBsSeq',
     version='1.0',
-    description='Toolkit to analyse the Bs-Seq data',
+    description='Toolkit to analyse the bisulfite sequencing data',
     long_description=long_description,
     url='https://github.com/rahbz/pyBsSeq',
     author=['Rahul Pisupati'],
@@ -27,13 +27,16 @@ setup(
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
     install_requires=[
         "numpy >=1.6.1",
+        "scipy >=0.17.0",
+        "vcfnp",
         "pandas"
-        "scipy >=0.17.0"
     ],
     entry_points={
         'console_scripts': [
             'pyBsSeq=pyBsSeq:main'
         ],
     },
+   package_data={'': ['*.r', '*.R']},
+   include_package_data=True
 )
 
