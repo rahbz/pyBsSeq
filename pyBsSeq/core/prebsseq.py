@@ -28,7 +28,7 @@ def BinomTest(per_n, n, p, alternative="greater"):
   tpVal = st.binom_test(per_n * n, n, p, alternative = alternative)
   return tpVal
 
- def getErrorRate(bsCHROM, bsCONTEXT, bsMethPer, bstC, chrs = "ChrC"):
+def getErrorRate(bsCHROM, bsCONTEXT, bsMethPer, bstC, chrs = "ChrC"):
   chrInd = np.where(bsCHROM == chrs)[0]
   contInd = chrInd[np.where((bsCONTEXT[chrInd] == 'CG') | (bsCONTEXT[chrInd] == 'CHG') | (bsCONTEXT[chrInd] == 'CHH'))[0]]
   chrMethPer = bsMethPer[contInd]
