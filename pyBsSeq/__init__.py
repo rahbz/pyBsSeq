@@ -2,7 +2,7 @@
     pyBsSeq
     ~~~~~~~~~~~~~
     A python toolkit for analysing the bisulfite-sequence data
-    :copyright: Rahul Pisupati @ 2016
+    :copyright: Rahul Pisupati @ 2017
     :license:   GMI
 """
 import os
@@ -55,7 +55,14 @@ def get_options(program_license,program_version_message):
     dmr_parser.add_argument("-o", "--outDMR", dest="outDMR", help="output file for DMR")
     dmr_parser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
     dmr_parser.set_defaults(func=dmrfind)
-    #lowfreq_parser = subparsers.add_parser('callLowFreq', help="Get lowfreq positions from allc files")
+    lowfreq_parser = subparsers.add_parser('callLowFreq', help="Get lowfreq positions from allc files")
+    lowfreq_parser.add_argument("-s", "--sample_id", dest="sample_id", help="unique sample ID for allc Files")
+    lowfreq_parser.add_argument("-p", "--path", dest="path_to_allc", help="path to allc files")
+    lowfreq_parser.add_argument("-c", "--unMethylatedControl", dest="unMeth", help="unmethylated control", default="ChrC")
+    lowfreq_parser.add_argument("-e", "--pvalue_thres", dest="pvalue_thres", help="threshold for p-value to call low-freq site", default=0.05)
+    lowfreq_parser.add_argument("-o", "--outFile", dest="outFile", help="output h5py file")
+    lowfreq_parser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
+    lowfreq_parser.set_defaults(func=lowfindfind)
     return inOptions
 
 def callMPsfromVCF(args):
@@ -77,12 +84,15 @@ def callmcs_onesample(args):
 def dmrfind(args):
     prebsseq.methylpy_dmrfind(args)
 
+def lowfindfind(args):
+    prebsseq.getLowFreqSites(args)
+
 def main():
   ''' Command line options '''
   program_version = "v%s" % __version__
   program_build_date = str(__updated__)
   program_version_message = '%%(prog)s %s (%s)' % (program_version, program_build_date)
-  program_shortdesc = "The main module for pyBsHap"
+  program_shortdesc = "The main module for pyBsSeq"
   program_license = '''%s
   Created by Rahul Pisupati on %s.
   Copyright 2016 Gregor Mendel Institute. All rights reserved.
