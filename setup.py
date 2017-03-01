@@ -10,10 +10,10 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='pyBsSeq',
-    version='1.0',
+    version='1.0.0',
     description='Toolkit to analyse the bisulfite sequencing data',
     long_description=long_description,
-    url='https://github.com/rahbz/pyBsSeq',
+    url='https://github.com/rbpisupati/pyBsSeq',
     author=['Rahul Pisupati'],
     author_email='rahul.bharadwaj.p@gmail.com',
     license='GMI',
@@ -30,13 +30,11 @@ setup(
         "scipy >=0.17.0",
         "vcfnp",
         "pandas"
+        "methylpy"
     ],
     entry_points={
         'console_scripts': [
             'pyBsSeq=pyBsSeq:main'
         ],
     },
-   package_data={'': ['*.r', '*.R']},
-   include_package_data=True
 )
-
