@@ -185,9 +185,16 @@ def outH5File(allcBed, chrpositions, outFile):
     h5file = h5py.File(outFile, 'w')
     num_lines = len(chrpositions)
     h5file.create_dataset('chrpositions', data=chrpositions, shape=(num_lines,),dtype='i4')
-    for i in range(allcBed.shape[1]):  ## Going through all the columns
-        h5file.create_dataset(allcBed.columns[i], data=np.array(bsbed[bsbed.columns[i]]), shape=(num_lines,))
+    ## Going through all the columns
+    for i in range(allcBed.shape[1]):
+        try:
+            h5file.create_dataset(allcBed.columns[i], data=np.array(allcBed[allcBed.columns[i]]), shape=(allcBed.shape[0],))
+        except TypeError:
+            h5file.create_dataset(allcBed.columns[i], data=np.array(allcBed[allcBed.columns[i]]).tolist(), shape=(allcBed.shape[0],))
     h5file.close()
+
+# Try to make it as a class, learned from PyGWAS
+#class HDF5MethTable():
 
 def getLowFreqSites(args):
     seq_error = 0.0001
@@ -212,12 +219,12 @@ def getLowFreqSites(args):
         bsbed = pd.read_table(allc)
         log.info("done!")
         meth_inds = np.where(bsbed['methylated'] == 1)[0]
-        mcpval = callMPs(np.array(bsbed['mc_count']), np.array(bsbed['total']), 1 - error_rate, alternative="less")
+        mcpval = callMPs(np.array(bsbed['mc_count'])[meth_inds], np.array(bsbed['total'])[meth_inds], 1 - error_rate, alternative="less")
         cpval = np.zeros(bsbed.shape[0], dtype="int8")
-        cpval[meth_inds[np.where(mcpval < args['pvalue_thres'])[0]]] = 1
-        np.append(lowfreq_pval, cpval)
+        cpval[meth_inds[np.where(mcpval < float(args['pvalue_thres'])[0]]] = 1
+        lowfreq_pval = np.append(lowfreq_pval, cpval)
         try:
-            pd.concat([allcBed, bsbed])
+            allcBed = pd.concat([allcBed, bsbed])
         except TypeError:
             allcBed = bsbed
     allcBed['lowfreq'] = pd.Series(lowfreq_pval, index=allcBed.index)
