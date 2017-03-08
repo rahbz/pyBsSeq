@@ -28,9 +28,9 @@ setup(
     install_requires=[
         "numpy >=1.6.1",
         "scipy >=0.17.0",
-        "vcfnp",
         "pandas",
         "methylpy"
+        "cutadapt"
     ],
     entry_points={
         'console_scripts': [

@@ -46,9 +46,11 @@ def getConvRate(bsCHROM, bsCONTEXT, bsMethPer, bstC, chrs = "ChrC"):
 def callMPs(bsMethPer, bstC, error_rate, alternative="greater", window=300000):
   bsPval = np.zeros(0,dtype=float)
   npBinomTest = np.vectorize(BinomTest)
+  log.info("running binomial test for indiviadual sites!")
   for i in range(0, len(bsMethPer), window):
     pVal = npBinomTest(bsMethPer[i:i+window], bstC[i:i+window], error_rate, alternative=alternative)
     bsPval = np.append(bsPval, pVal)
+    log.info("progress: %s positions" % (i + window))
   return bsPval
 
 def getconv_rate_allc(allcFile):
@@ -188,13 +190,22 @@ def outH5File(allcBed, chrpositions, outFile):
     ## Going through all the columns
     for i in range(allcBed.shape[1]):
         try:
-            h5file.create_dataset(allcBed.columns[i], data=np.array(allcBed[allcBed.columns[i]]), shape=(allcBed.shape[0],))
+            h5file.create_dataset(allcBed.columns[i], compression="gzip", data=np.array(allcBed[allcBed.columns[i]]), shape=(allcBed.shape[0],))
         except TypeError:
-            h5file.create_dataset(allcBed.columns[i], data=np.array(allcBed[allcBed.columns[i]]).tolist(), shape=(allcBed.shape[0],))
+            h5file.create_dataset(allcBed.columns[i], compression="gzip", data=np.array(allcBed[allcBed.columns[i]]).tolist(), shape=(allcBed.shape[0],))
     h5file.close()
 
 # Try to make it as a class, learned from PyGWAS
-#class HDF5MethTable():
+class HDF5MethTable(object):
+
+    def __init__(self,hdf5_file):
+        self.h5file = h5py.File(hdf5_file, 'r')
+    def chr(self):
+        self.chr = self.h5file['chr'][:]
+    def pos(self):
+        self.pos = self['pos'][:]
+    def strand(self):
+        self.strand = self['strand'][:]
 
 def getLowFreqSites(args):
     seq_error = 0.0001
@@ -207,7 +218,7 @@ def getLowFreqSites(args):
         die("Provide a unMethylatedControl to get conversion efficiency")
     error_rate = 1 - conv_rate + seq_error
     chrs = getChrs_allc(umethfile)
-    lowfreq_pval = np.zeros(0,dtype="float16")
+    lowfreq_pval = np.zeros(0,dtype="int8")
     allcBed = []
     chrpositions = []
     for c in chrs:
@@ -217,16 +228,17 @@ def getLowFreqSites(args):
         chrpositions.append(len(lowfreq_pval))
         log.info("reading file %s" % allc)
         bsbed = pd.read_table(allc)
-        log.info("done!")
+        log.info("analysing %s!" % c)
         meth_inds = np.where(bsbed['methylated'] == 1)[0]
         mcpval = callMPs(np.array(bsbed['mc_count'])[meth_inds], np.array(bsbed['total'])[meth_inds], 1 - error_rate, alternative="less")
         cpval = np.zeros(bsbed.shape[0], dtype="int8")
-        cpval[meth_inds[np.where(mcpval < float(args['pvalue_thres'])[0]]] = 1
+        cpval[meth_inds[np.where(mcpval < args['pvalue_thres'])[0]]] = 1
         lowfreq_pval = np.append(lowfreq_pval, cpval)
         try:
             allcBed = pd.concat([allcBed, bsbed])
         except TypeError:
             allcBed = bsbed
+        log.info("done!")
     allcBed['lowfreq'] = pd.Series(lowfreq_pval, index=allcBed.index)
     log.info("writing the data into a h5 file")
     outH5File(allcBed,chrpositions, args['outFile'])
